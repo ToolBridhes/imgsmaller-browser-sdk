@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ImgSmaller SDK Demo</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;line-height:1.5;padding:20px;max-width:840px;margin:0 auto}
+    .row{display:flex;gap:16px;flex-wrap:wrap}
+    .card{border:1px solid #e5e7eb;border-radius:12px;padding:16px}
+    img{max-width:100%;height:auto;border-radius:8px;border:1px solid #e5e7eb}
+    button{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:10px 14px;cursor:pointer}
+    input[type=number]{width:100px}
+  </style>
+</head>
+<body>
+  <h1>ImgSmaller Browser SDK Demo</h1>
+  <p>Compress images client‑side. Learn more at <a href="https://imgsmaller.com" target="_blank" rel="noopener">imgsmaller.com</a>.</p>
+
+  <div class="card">
+    <div class="row" style="align-items:center">
+      <input type="file" id="file" accept="image/*">
+      <label>Target (KB): <input type="number" id="kb" value="100" min="1" step="1"></label>
+      <label>Format:
+        <select id="fmt">
+          <option value="image/jpeg">JPEG</option>
+          <option value="image/webp">WEBP</option>
+          <option value="image/png">PNG</option>
+        </select>
+      </label>
+      <label>Auto <input type="checkbox" id="auto" checked></label>
+      <button id="go">Compress</button>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:16px">
+    <div class="card" style="flex:1 1 320px">
+      <h3>Original</h3>
+      <img id="orig" alt="original"/>
+      <div id="origMeta" style="font-size:12px;color:#374151"></div>
+    </div>
+    <div class="card" style="flex:1 1 320px">
+      <h3>Compressed</h3>
+      <img id="out" alt="compressed"/>
+      <div id="outMeta" style="font-size:12px;color:#374151"></div>
+      <div style="margin-top:8px"><a id="dl" href="#" download="compressed.jpg">Download</a></div>
+    </div>
+  </div>
+
+  <script src="/sdk/imgsmaller.js"></script>
+  <script>
+  (function(){
+    const $ = (s)=>document.querySelector(s);
+    const file = $('#file'); const kb=$('#kb'); const fmt=$('#fmt'); const auto=$('#auto'); const go=$('#go');
+    const orig=$('#orig'); const out=$('#out'); const dl=$('#dl'); const om=$('#origMeta'); const mm=$('#outMeta');
+    file.addEventListener('change',()=>{
+      const f=file.files[0]; if(!f) return;
+      const url=URL.createObjectURL(f); orig.src=url; om.textContent = `${f.type||'image'} — ${(f.size/1024).toFixed(1)} KB`;
+    });
+    go.addEventListener('click', async ()=>{
+      const f=file.files[0]; if(!f){ alert('Pick an image'); return; }
+      const targetKB = Math.max(1, parseInt(kb.value||'100',10));
+      const mime = fmt.value; const useAuto = !!auto.checked;
+      const res = await ImgSmaller.SDK.compress(f, { targetKB, mime, auto: useAuto });
+      out.src = res.objectUrl; mm.textContent = `${res.mime} — ${(res.bytes/1024).toFixed(1)} KB`;
+      const ext = res.mime.split('/')[1] || 'jpg'; dl.href=res.objectUrl; dl.download=`compressed.${ext}`;
+    });
+  })();
+  </script>
+</body>
+</html>
