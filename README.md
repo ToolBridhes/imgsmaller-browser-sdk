@@ -30,7 +30,7 @@ Website: https://imgsmaller.com
     - `background` (hex or css color) – fill bg for JPEG
 
 ## Demo (CodePen)
-Copy the HTML snippet above into a CodePen/JSFiddle and add a file input.
+https://codepen.io/subarnadip/pen/qEbOeXg
 
 ## License
 MIT
