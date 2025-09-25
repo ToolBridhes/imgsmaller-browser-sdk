@@ -1,0 +1,89 @@
+/*! ImgSmaller Browser SDK v0.1.0 | MIT | https://imgsmaller.com */
+(function(root){
+  'use strict';
+
+  function isFileLike(x){ return x && (x instanceof Blob || (typeof File !== 'undefined' && x instanceof File)); }
+  function isImageEl(x){ return x && x.tagName && x.tagName.toUpperCase() === 'IMG'; }
+  function loadImage(src){
+    return new Promise(function(resolve, reject){
+      var img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = function(){ resolve(img); };
+      img.onerror = function(e){ reject(new Error('Failed to load image')); };
+      img.src = src;
+    });
+  }
+  function drawToCanvas(img, opts){
+    opts = opts || {};
+    var w = Math.max(1, Math.round(opts.width || img.naturalWidth || img.width));
+    var h = Math.max(1, Math.round(opts.height || img.naturalHeight || img.height));
+    var canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    var ctx = canvas.getContext('2d');
+    // Optional background fill (useful when outputting JPEG without alpha)
+    if (opts.background) { ctx.fillStyle = opts.background; ctx.fillRect(0,0,w,h); }
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas;
+  }
+  function supportsMime(mime){
+    try{ var c=document.createElement('canvas'); return !!(c && c.toDataURL && c.toDataURL(mime).indexOf('data:'+mime)===0); }catch(_){ return false; }
+  }
+  function toBlobAsync(canvas, mime, quality){
+    return new Promise(function(resolve){ canvas.toBlob(function(b){ resolve(b); }, mime, quality); });
+  }
+  async function encodeTarget(canvas, targetBytes, mime, opts){
+    opts = opts || {}; var auto = !!opts.auto;
+    if (mime === 'image/png'){ return toBlobAsync(canvas, 'image/png'); }
+    var MIN_Q = 0.005, MAX_Q = 0.98;
+    var encode = function(q){ return toBlobAsync(canvas, mime, Math.max(0.001, Math.min(0.99, q))); };
+    if (!auto){
+      var low = await encode(MIN_Q); if (!low) return encode(0.85);
+      if (low.size > targetBytes) return low;
+      var high = await encode(MAX_Q); if (high && high.size <= targetBytes) return high;
+      var lo=MIN_Q, hi=MAX_Q, best=low, smallest=low, it=0;
+      while (it++<20){
+        var mid=(lo+hi)/2; var b=await encode(mid); if(!b) break;
+        if (!smallest || b.size < smallest.size) smallest = b;
+        if (b.size > targetBytes){ hi=Math.max(MIN_Q, mid-0.005); }
+        else { best=b; lo=mid; }
+        if (Math.abs(b.size - targetBytes) <= 256) break;
+        if (hi - lo < 0.003) break;
+      }
+      return best || smallest || low;
+    } else {
+      var lo2=0.2, hi2=MAX_Q, best2=null, last=null, k=0;
+      while (k++<14){ var q=(lo2+hi2)/2; var bb=await encode(q); if(!bb) break; last=bb; if (bb.size>targetBytes){ hi2=q; } else { best2=bb; lo2=q; } if (Math.abs((best2?best2.size:bb.size)-targetBytes) < 1024) break; }
+      return best2 || last || encode(0.9);
+    }
+  }
+
+  async function ensureImage(input){
+    if (isImageEl(input)) return input;
+    if (typeof input === 'string') return loadImage(input);
+    if (isFileLike(input)){
+      var url = URL.createObjectURL(input);
+      try { var img = await loadImage(url); return img; }
+      finally { try{ URL.revokeObjectURL(url); }catch(_){ } }
+    }
+    throw new Error('Unsupported input: provide File/Blob, <img>, or URL string');
+  }
+
+  async function compress(input, options){
+    var opts = options || {};
+    var targetKB = Math.max(1, parseInt(opts.targetKB || 100, 10));
+    var targetBytes = targetKB * 1024;
+    var mime = (opts.mime || opts.format || 'image/jpeg').toLowerCase();
+    if (!/^image\//.test(mime)) mime = 'image/jpeg';
+    if (!supportsMime(mime)) mime = 'image/jpeg';
+    var img = await ensureImage(input);
+    var bg = opts.background || (mime === 'image/jpeg' ? '#ffffff' : null);
+    var canvas = drawToCanvas(img, { width: opts.width, height: opts.height, background: bg });
+    var blob = await encodeTarget(canvas, targetBytes, mime, { auto: !!opts.auto });
+    var url = URL.createObjectURL(blob);
+    return { blob: blob, objectUrl: url, mime: mime, bytes: blob.size };
+  }
+
+  var api = { version: '0.1.0', compress: compress };
+  if (typeof module !== 'undefined' && module.exports){ module.exports = api; }
+  root.ImgSmaller = root.ImgSmaller || {}; root.ImgSmaller.SDK = api;
+})(typeof window !== 'undefined' ? window : globalThis);
